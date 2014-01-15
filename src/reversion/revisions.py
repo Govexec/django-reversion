@@ -15,7 +15,7 @@ from django.core import serializers
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.signals import request_finished
 from django.db import models, DEFAULT_DB_ALIAS, connection
-from django.db.models import Q, Max
+from django.db.models import Q, Max, get_model
 from django.db.models.query import QuerySet
 from django.db.models.signals import post_save, pre_delete
 
@@ -353,16 +353,27 @@ class RevisionManager(object):
 
     # Registration methods.
 
+    def _registration_key_for_model(self, model):
+        content_type = ContentType.objects.get_for_model(model)
+        return (
+            content_type.app_label,
+            content_type.model,
+        )
+
     def is_registered(self, model):
         """
         Checks whether the given model has been registered with this revision
         manager.
         """
-        return model in self._registered_models
+        return self._registration_key_for_model(model) in self._registered_models
     
     def get_registered_models(self):
         """Returns an iterable of all registered models."""
-        return self._registered_models.keys()
+        return [
+            get_model(*key)
+            for key
+            in self._registered_models.keys()
+        ]
         
     def register(self, model, adapter_cls=VersionAdapter, **field_overrides):
         """Registers a model with this revision manager."""
@@ -377,7 +388,7 @@ class RevisionManager(object):
             adapter_cls = type("Custom" + adapter_cls.__name__, (adapter_cls,), field_overrides)
         # Perform the registration.
         adapter_obj = adapter_cls(model)
-        self._registered_models[model] = adapter_obj
+        self._registered_models[self._registration_key_for_model(model)] = adapter_obj
         # Connect to the post save signal of the model.
         post_save.connect(self._post_save_receiver, model)
         pre_delete.connect(self._pre_delete_receiver, model)
@@ -385,14 +396,18 @@ class RevisionManager(object):
     def get_adapter(self, model):
         """Returns the registration information for the given model class."""
         if self.is_registered(model):
-            return self._registered_models[model]
-        raise RegistrationError, "%r has not been registered with django-reversion" % model
+            return self._registered_models[self._registration_key_for_model(model)]
+        raise RegistrationError("{model} has not been registered with django-reversion".format(
+            model = model,
+        ))
         
     def unregister(self, model):
         """Removes a model from version control."""
         if not self.is_registered(model):
-            raise RegistrationError, "%r has not been registered with django-reversion" % model
-        del self._registered_models[model]
+            raise RegistrationError("{model} has not been registered with django-reversion".format(
+                model = model,
+            ))
+        del self._registered_models[self._registration_key_for_model(model)]
         post_save.disconnect(self._post_save_receiver, model)
         pre_delete.disconnect(self._pre_delete_receiver, model)
     

@@ -66,10 +66,14 @@ class VersionAdapter(object):
                     if hasattr(obj, related_field.get_cache_name()):
                         delattr(obj, related_field.get_cache_name())
             # Get the referenced obj(s).
-            try:
-                related = getattr(obj, relationship)
-            except ObjectDoesNotExist:
-                continue
+            generic_rel =  relationship + '_generic_rel'
+            if hasattr(obj, generic_rel):
+                related = getattr(obj, generic_rel)
+            else:
+                try:
+                    related = getattr(obj, relationship)
+                except ObjectDoesNotExist:
+                    continue
             if isinstance(related, models.Model):
                 yield related
             elif isinstance(related, (models.Manager, QuerySet)):

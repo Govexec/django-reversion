@@ -10,6 +10,8 @@ import operator, sys
 from threading import local
 from weakref import WeakValueDictionary
 
+from cropduster.fields import CropDusterImageFieldFile
+
 from django.contrib.contenttypes.models import ContentType
 from django.core import serializers
 from django.core.exceptions import ObjectDoesNotExist
@@ -75,6 +77,8 @@ class VersionAdapter(object):
             elif isinstance(related, (models.Manager, QuerySet)):
                 for related_obj in related.all():
                     yield related_obj
+            elif isinstance(related, CropDusterImageFieldFile):
+                continue  # incompatible with cropduster4 fields
             elif related is not None:
                 raise TypeError, "Cannot follow the relationship %r. Expected a model or QuerySet, found %r" % (relationship, related)
     
